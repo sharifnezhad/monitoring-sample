@@ -1,0 +1,22 @@
+groups:
+  - name: example
+    rules:
+      - alert: HighRequestLatencyCustomer
+        expr: count by (job, instance, service_name) (calls_total{service_name="customer"}) > 1
+        for: 5s
+        labels:
+          severity: warning
+          service: 'customer'
+          job: '123'
+        annotations:
+          summary: High request latency for job {{ $labels.job }} (instance {{ $labels.service_name }})
+
+      - alert: HighRequestLatencyCustomer
+        expr: count by (job, instance, service_name) (calls_total{service_name="driver"}) > 1
+        for: 5s
+        labels:
+          severity: warning
+          service: 'driver'
+          job: '154'
+        annotations:
+          summary: High request latency for job {{ $labels.job }} (instance {{ $labels.service_name }})

@@ -1,0 +1,21 @@
+version: '2'
+
+services:
+  otel_collector:
+    networks:
+      - metrics
+    container_name: otel
+    image: otel/opentelemetry-collector-contrib:0.89.0
+    volumes:
+      - ./otel-collector-config-connector.yml:/etc/otelcol/otel-collector-config.yml
+    command: --config /etc/otelcol/otel-collector-config.yml
+    ports:
+      - "8889:8889"
+  microsim:
+    networks:
+      - metrics
+    image: yurishkuro/microsim:0.2.0
+    command: "-j http://otel:14278/api/traces -d 24h -s 500ms"
+networks:
+  metrics:
+    external: true

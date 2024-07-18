@@ -1,0 +1,95 @@
+version: '2'
+
+services:
+  jaeger-collector:
+    image: jaegertracing/jaeger-collector
+    command:
+      - "--cassandra.keyspace=jaeger_v1_dc1"
+      - "--cassandra.servers=cassandra"
+      - "--collector.zipkin.host-port=9411"
+      - "--sampling.initial-sampling-probability=.5"
+      - "--sampling.target-samples-per-second=.01"
+      - "--collector.otlp.enabled=true"
+      # "--cassandra.consistency=ALL"
+      # "--cassandra-archive.enabled=true"
+      # "--cassandra-archive.consistency=ALL"
+    environment:
+      - SAMPLING_CONFIG_TYPE=adaptive
+      - METRICS_STORAGE_TYPE=prometheus
+      - PROMETHEUS_SERVER_URL=http://prometheus:9090
+      - PROMETHEUS_QUERY_SUPPORT_SPANMETRICS_CONNECTOR=${PROMETHEUS_QUERY_SUPPORT_SPANMETRICS_CONNECTOR:-true}
+      - PROMETHEUS_QUERY_NAMESPACE=${PROMETHEUS_QUERY_NAMESPACE:-}
+      - PROMETHEUS_QUERY_DURATION_UNIT=${PROMETHEUS_QUERY_DURATION_UNIT:-}
+      - PROMETHEUS_QUERY_NORMALIZE_CALLS=true
+      - PROMETHEUS_QUERY_NORMALIZE_DURATION=true
+    ports:
+      - "14269:14269"
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+    restart: unless-stopped
+    depends_on:
+      - cassandra-schema
+    networks:
+      - metrics
+
+  jaeger-query:
+    image: jaegertracing/jaeger-query
+    environment:
+      - METRICS_STORAGE_TYPE=prometheus
+      - PROMETHEUS_SERVER_URL=http://prometheus:9090
+      - PROMETHEUS_QUERY_SUPPORT_SPANMETRICS_CONNECTOR=true
+      - PROMETHEUS_QUERY_NORMALIZE_CALLS=true
+      - PROMETHEUS_QUERY_NORMALIZE_DURATION=true
+    command:
+      - "--cassandra.keyspace=jaeger_v1_dc1"
+      - "--cassandra.servers=cassandra"
+      # "--cassandra.consistency=ALL"
+      # "--cassandra-archive.enabled=true"
+      # "--cassandra-archive.consistency=ALL"
+    ports:
+      - "16670:16686"
+      - "16687"
+    restart: unless-stopped
+    depends_on:
+      - cassandra-schema
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.jaeger.rule=Host(`jaeger.staging.greentesting.ir`)
+      - traefik.http.services.jaeger.loadbalancer.server.port=16686
+      - traefik.http.routers.jaeger.middlewares=dev-team@file,greenweb-whitelist@file
+    networks:
+      - metrics
+
+  jaeger-agent:
+    container_name: jaeger2
+    image: jaegertracing/jaeger-agent
+    command: [ "--reporter.grpc.host-port=jaeger-collector:14250" ]
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+    restart: unless-stopped
+    depends_on:
+      - jaeger-collector
+    networks:
+      - metrics
+
+  cassandra:
+    image: cassandra:4.0
+    networks:
+      - metrics
+    restart: unless-stopped
+
+  cassandra-schema:
+    image: jaegertracing/jaeger-cassandra-schema
+    depends_on:
+      - cassandra
+    networks:
+      - metrics
+    restart: unless-stopped
+
+networks:
+  metrics:
+    external: true
